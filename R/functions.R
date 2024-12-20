@@ -1,13 +1,3 @@
-lm_eqn = function(df){
-  m = lm(y ~ x, df);
-  eq = substitute(Slope: b*","~~italic(R)^2~"="~r2, 
-                   list(a = format(unname(coef(m)[1]), digits = 2),
-                        b = format(unname(coef(m)[2]), digits = 2),
-                        r2 = format(summary(m)$r.squared, digits = 3)))
-  as.character(as.expression(eq));
-}
-
-
 run_analysis = function(var, data) {
   K <- list(`Warming effect` = c(-1, 1, 0, 0),
             `Cooling effect` = c(0, 0, -1, 1),
@@ -72,6 +62,8 @@ recode_var = function(data){
                         tot.qpcr = "Bacterial biomass (root + sand)",
                         arbuscule = "Arbuscular \ncolonization",
                         moisture = "Moisture",
+                        soil_temperature = "Soil temperature",
+                        growing_season_length = "Growing season length",
                         soil.P.concentration = "P concentration",
                         soil.nitrate.concentration = "Nitrate concentration",
                         soil.P = "P concentration",

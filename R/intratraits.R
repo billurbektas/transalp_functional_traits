@@ -110,29 +110,29 @@ plasticity =
   mutate(mean_value = mean(intra, na.rm = TRUE))%>%
   ungroup()
 
-pdf(file = "plots/compare_inter_intra.pdf", height = 8, width = 10)
-plasticity %>%
-  dplyr::select(species, combi_fac, year, species, traits, inter, mean_value)%>%
-  filter(traits != "LMA")%>%
-  distinct()%>%
-  ungroup()%>%
-  mutate(year = as.factor(year))%>%
-  ggplot(aes(inter, mean_value, color = combi_fac))+
-  facet_wrap(.~traits, scales = "free")+
-  geom_point(size = 0.7, alpha = 0.5)+
-  geom_abline(intercept = 0, slope = 1, color = "grey50")+
-  stat_smooth(method = "lm", se = FALSE, alpha = 0.1,
-              aes(linetype = year))+
-  theme_bw()+
-  scale_color_manual(values = trecol)+
-  scale_linetype_manual(values = c("dashed", "solid"))+
-  labs(x = "Species interspecific trait values (TRY database)",
-       y = "Species intraspecific trait values (average per species)",
-       color = "",
-       linetype = "Year")+
-  theme(legend.position = "bottom")+
-  stat_cor(show.legend = FALSE, method = "pearson")
-dev.off()
+# pdf(file = "plots/compare_inter_intra.pdf", height = 8, width = 10)
+# plasticity %>%
+#   dplyr::select(species, combi_fac, year, species, traits, inter, mean_value)%>%
+#   filter(traits != "LMA")%>%
+#   distinct()%>%
+#   ungroup()%>%
+#   mutate(year = as.factor(year))%>%
+#   ggplot(aes(inter, mean_value, color = combi_fac))+
+#   facet_wrap(.~traits, scales = "free")+
+#   geom_point(size = 0.7, alpha = 0.5)+
+#   geom_abline(intercept = 0, slope = 1, color = "grey50")+
+#   stat_smooth(method = "lm", se = FALSE, alpha = 0.1,
+#               aes(linetype = year))+
+#   theme_bw()+
+#   scale_color_manual(values = trecol)+
+#   scale_linetype_manual(values = c("dashed", "solid"))+
+#   labs(x = "Species interspecific trait values (TRY database)",
+#        y = "Species intraspecific trait values (average per species)",
+#        color = "",
+#        linetype = "Year")+
+#   theme(legend.position = "bottom")+
+#   stat_cor(show.legend = FALSE, method = "pearson")
+# dev.off()
 
 spAC = plasticity %>% filter(combi_fac == "AlpineControl") %>% dplyr::select(species)%>%distinct()%>%pull(species)
 spSC = plasticity %>% filter(combi_fac == "SubalpineControl") %>% dplyr::select(species)%>%distinct()%>%pull(species)
@@ -202,23 +202,23 @@ annotations =
   ) %>%
   filter(traits != "LMA") # Assuming you don't want to show LMA trait
 
-pdf(file = "plots/plasticity_warmed.pdf", height = 8, width = 10)
-plasticity %>%
-  filter(year == 2021, traits != "LMA", species %in% spW, combi_fac %in% c("AlpineControl", "AlpineWarmed")) %>%
-  left_join(annotations, by = c("species", "traits"))%>%
-  ggplot(aes(x = intra, y = species)) +
-  geom_boxplot(aes(fill = combi_fac, alpha = significance, color = significance), outliers = FALSE) +
-  facet_wrap(. ~ traits, scales = "free") +
-  theme_bw() +
-  scale_fill_manual(values = trecol) +
-  scale_color_manual(values = c("black","grey50"))+
-  theme(legend.position = "bottom") +
-  scale_alpha_manual(values = c(1, 0.2))+
-  labs(x = "Intraspecific traits",
-       y = "",
-       fill = "",
-       color = "Significance", alpha = "Significance")
-dev.off()
+# pdf(file = "plots/plasticity_warmed.pdf", height = 8, width = 10)
+# plasticity %>%
+#   filter(year == 2021, traits != "LMA", species %in% spW, combi_fac %in% c("AlpineControl", "AlpineWarmed")) %>%
+#   left_join(annotations, by = c("species", "traits"))%>%
+#   ggplot(aes(x = intra, y = species)) +
+#   geom_boxplot(aes(fill = combi_fac, alpha = significance, color = significance), outliers = FALSE) +
+#   facet_wrap(. ~ traits, scales = "free") +
+#   theme_bw() +
+#   scale_fill_manual(values = trecol) +
+#   scale_color_manual(values = c("black","grey50"))+
+#   theme(legend.position = "bottom") +
+#   scale_alpha_manual(values = c(1, 0.2))+
+#   labs(x = "Intraspecific traits",
+#        y = "",
+#        fill = "",
+#        color = "Significance", alpha = "Significance")
+# dev.off()
 
 annotations = 
   plasticity %>%
@@ -251,25 +251,25 @@ annotations =
   ) %>%
   filter(traits != "LMA") # Assuming you don't want to show LMA trait
 
-pdf(file = "plots/plasticity_cooled.pdf", height = 8, width = 10)
-plasticity %>%
-  filter(year == 2021, traits != "LMA", species %in% spC, combi_fac %in% c("SubalpineControl", "SubalpineCooled")) %>%
-  left_join(annotations, by = c("species", "traits"))%>%
-  mutate(species = recode(species, "Patzkea paniculata subsp. paniculata" = "Patzkea paniculata",
-                          "Plantago maritima subsp. serpentina"="Plantago serpentina"))%>%
-  ggplot(aes(x = intra, y = species)) +
-  geom_boxplot(aes(fill = combi_fac, alpha = significance, color = significance), outliers = FALSE) +
-  facet_wrap(. ~ traits, scales = "free") +
-  theme_bw() +
-  scale_fill_manual(values = trecol) +
-  scale_color_manual(values = c("black","grey50"))+
-  theme(legend.position = "bottom") +
-  scale_alpha_manual(values = c(1, 0.2))+
-  labs(x = "Intraspecific traits",
-       y = "",
-       fill = "",
-       color = "Significance", alpha = "Significance")
-dev.off()
+# pdf(file = "plots/plasticity_cooled.pdf", height = 8, width = 10)
+# plasticity %>%
+#   filter(year == 2021, traits != "LMA", species %in% spC, combi_fac %in% c("SubalpineControl", "SubalpineCooled")) %>%
+#   left_join(annotations, by = c("species", "traits"))%>%
+#   mutate(species = recode(species, "Patzkea paniculata subsp. paniculata" = "Patzkea paniculata",
+#                           "Plantago maritima subsp. serpentina"="Plantago serpentina"))%>%
+#   ggplot(aes(x = intra, y = species)) +
+#   geom_boxplot(aes(fill = combi_fac, alpha = significance, color = significance), outliers = FALSE) +
+#   facet_wrap(. ~ traits, scales = "free") +
+#   theme_bw() +
+#   scale_fill_manual(values = trecol) +
+#   scale_color_manual(values = c("black","grey50"))+
+#   theme(legend.position = "bottom") +
+#   scale_alpha_manual(values = c(1, 0.2))+
+#   labs(x = "Intraspecific traits",
+#        y = "",
+#        fill = "",
+#        color = "Significance", alpha = "Significance")
+# dev.off()
 
 intratraits = 
   intratraits %>% 

@@ -21,4 +21,3 @@ myco = get(load("data/input_counts.RData")) %>%
   dplyr::summarize(arbuscule.occ = median(arbuscule.occ),
             hypha.occ = median(hypha.occ))
 
-data = left_join(data, myco, by = c("combi_fac","rep"))

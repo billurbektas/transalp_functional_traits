@@ -1,24 +1,14 @@
-{library(Hmisc)
-  library(corrplot)
-  library(tidyverse)
-  library(broom)
-  library(FactoMineR)
-  library(tidyr)
-  library(factoextra)
-  library(patchwork)
-  library(reshape2)
-  library(emmeans)
-  library(vegan)
-  library(tibble)
-  library(paran)
-  library(ggrepel)
-  library(ggh4x)
-  library(scales)
-  library(ggnewscale)
-  library(psych)
-}
-
 # Setup----
+library(tidyverse)
+library(vegan)
+library(emmeans)
+library(broom)
+library(paran)
+library(ggrepel)
+library(patchwork)
+library(scales)
+library(ggnewscale)
+
 options(digits = 15)
 Sys.setlocale("LC_ALL", "C")
 # Set color code----
@@ -31,23 +21,34 @@ names(trecol) = c("AlpineControl","AlpineWarmed","SubalpineControl","SubalpineCo
 names(efcol) = c("Warming effect","Cooling effect")
 names(tracol) = c("Below-ground traits","Above-ground traits")
 names(specol) = c("Economic spectrum","Collaboration spectrum","Other")
-# Get the data from Rodrigue----
 
-data = get(load("data/data.Rdata"))
+# Get the functions and data  ----
 source("R/intratraits.R")
 source("R/microscopy.R")
 source("R/functions.R")
 source("R/moisture.R")
 
+# Get environmental differences between sites ----
+metaexp = read_csv("data/env.2021.csv") 
+warming = round(metaexp %>% filter(site == "subalpine") %>% pull(soil_temperature_shallow_july) - metaexp %>% filter(site == "alpine") %>% pull(soil_temperature_shallow_july))
+gsl = round(metaexp %>% filter(site == "subalpine") %>% pull(LengthGS_annual) - metaexp %>% filter(site == "alpine") %>% pull(LengthGS_annual))
+
 data = 
-  data %>%
+  get(load("data/data.Rdata"))%>%
   filter(project == "AlpagesVolants")%>%
   mutate(year = 2021)%>%
   left_join(intratraits, by = c("combi_fac","rep", "year"))%>%
-  left_join(moisture %>% mutate(year = 2021), by = c("combi_fac","rep", "year"))
+  left_join(moisture %>% mutate(year = 2021), by = c("combi_fac","rep", "year"))%>%
+  left_join(myco, by = c("combi_fac","rep"))%>%
+  mutate(soil_temperature = ifelse(combi_fac %in% c("AlpineControl", "SubalpineCooled"), metaexp %>% filter(site == "alpine") %>% pull(soil_temperature_shallow_july),
+                                   metaexp %>% filter(site == "subalpine") %>% pull(soil_temperature_shallow_july)),
+         growing_season_length = ifelse(combi_fac %in% c("AlpineControl", "SubalpineCooled"), metaexp %>% filter(site == "alpine") %>% pull(LengthGS_annual),
+                                   metaexp %>% filter(site == "subalpine") %>% pull(LengthGS_annual))
+         )
+
 
 ## Define stress conditions with untransformed variables ----
-variables = c("moisture", "soil.P.concentration", "soil.nitrate.concentration")
+variables = c("moisture", "soil.P.concentration", "soil.nitrate.concentration", "soil_temperature", "growing_season_length")
 res = map(variables, run_analysis, data = data)
 mT = map_df(res, "test_results") %>% recode_var(.)
 mK = 
@@ -65,18 +66,47 @@ mK =
   rename(magnitude = estimate) %>%
   mutate(adj.p.value = ifelse(adj.p.value>=0.05, "ns", "*"))
 
-pp3 =
+ppdf =
   mT %>% 
   left_join(mK, by = c("var", "combi_fac")) %>%
   filter(combi_fac %in% c("AlpineControl", "AlpineWarmed","SubalpineControl"))%>%
   mutate(combi_fac = factor(combi_fac, levels = c("AlpineControl", "AlpineWarmed","SubalpineControl")))%>%
   mutate(var = case_when(var == "Moisture" ~ "Moisture (%)",
                          var == "P concentration" ~ "P concentration (mg/kg)",
-                         var == "Nitrate concentration" ~ "Nitrate concentration (mg/kg)"))%>%
-  mutate(var = factor(var, levels = c("Moisture (%)","P concentration (mg/kg)","Nitrate concentration (mg/kg)")))%>%
+                         var == "Nitrate concentration" ~ "Nitrate concentration (mg/kg)",
+                         var == "Soil temperature" ~ "July soil temperature (\u00B0C)",
+                         var == "Growing season length" ~ "Growing season length (days)"))%>%
+  mutate(var = factor(var, levels = c("July soil temperature (\u00B0C)","Growing season length (days)","Moisture (%)","P concentration (mg/kg)","Nitrate concentration (mg/kg)")))
+
+pp = 
+  ppdf %>% filter(var %in% c("July soil temperature (\u00B0C)", "Growing season length (days)"))%>%
   ggplot(aes(combi_fac, estimate, color = combi_fac)) +
-  facet_wrap(. ~ var, scales = "free_y") +
-  geom_hline(yintercept = 0, color = "grey40") +
+  facet_wrap(. ~ var, scales = "free_y", ncol = 5) +
+  geom_point(position = position_dodge(width = 0.2), alpha = 0.5, size = 5) +
+  geom_errorbar(aes(ymin = lower.CL, ymax = upper.CL),
+                position = position_dodge(width = 0.2), alpha = 0.5, size = 1) +
+  geom_line(data = . %>% filter(combi_fac %in% c("AlpineWarmed", "AlpineControl") & contrast == "Warming effect"),
+            aes(group = interaction(var),alpha = adj.p.value), 
+            position = position_dodge(width = 0.2), linetype = "solid", color = "black", size = 1.2,
+            arrow = ggplot2::arrow(type = "open", ends = "last", length = unit(0.1, "inches"))) +
+  scale_color_manual(values = trecol)+
+  scale_size_continuous(breaks = c(0, 0.5, 1, 1.5), range = c(0.3, 2))+
+  scale_alpha_manual(values = c(1, 0.4))+
+  theme_bw() +
+  guides(color = "none")+
+  labs(alpha = "Significant differences", linetype = "", y = "", x = "")+
+  theme(legend.position = "bottom",
+        text = element_text(size = 14),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank())
+pdf("PLOTS/effect_size_EC_1.pdf", height = 4, width = 6)
+print(pp)
+dev.off()
+
+pp = 
+  ppdf %>% filter(!var %in% c("July soil temperature (\u00B0C)", "Growing season length (days)"))%>%
+  ggplot(aes(combi_fac, estimate, color = combi_fac)) +
+  facet_wrap(. ~ var, scales = "free_y", ncol = 5) +
   geom_point(position = position_dodge(width = 0.2), alpha = 0.5, size = 5) +
   geom_errorbar(aes(ymin = lower.CL, ymax = upper.CL),
                 position = position_dodge(width = 0.2), alpha = 0.5, size = 1) +
@@ -98,8 +128,8 @@ pp3 =
         text = element_text(size = 14),
         axis.text.x = element_blank(),
         axis.ticks.x = element_blank())
-pdf("PLOTS/effect_size_EC.pdf", height = 10, width = 8)
-pp3
+pdf("PLOTS/effect_size_EC_2.pdf", height = 4, width = 9)
+print(pp)
 dev.off()
 
 ## Log transform and scale variables ----
@@ -129,8 +159,10 @@ data =
          moisture = as.numeric(scale(moisture)),
          soil.P = as.numeric(scale(soil.P.concentration)),
          soil.nitrate = as.numeric(scale(soil.nitrate.concentration)),
-         soil.OM = as.numeric(scale(soil.OM.concentration))
+         soil.OM = as.numeric(scale(soil.OM.concentration)), 
+         soil_temperature = as.numeric(scale(soil_temperature))
 )
+
 # Fill the gaps for the NAs----
 data.sel =
   bind_rows(data %>% filter(combi_fac != "SubalpineControl"),
@@ -155,12 +187,11 @@ data.sel =
                      tot.qpcr = replace_na(tot.qpcr, mean(tot.qpcr, na.rm = TRUE)),
                      qpcr.root = replace_na(qpcr.root, mean(qpcr.root, na.rm = TRUE))))
 
-
 data.sel =
   data.sel %>%
   dplyr::select(combi_fac, rep, logLMA, logLNC, logRN, logRTD, logSRL, logRD, logheight,
                 above.prod, below.prod, rate.green, rate.red, tot.decomp, ratio.decomp, 
-                qpcr.root, qpcr.soil, tot.qpcr, arbuscule, moisture, soil.nitrate, soil.P, soil.OM)%>%
+                qpcr.root, qpcr.soil, tot.qpcr, arbuscule, moisture, soil.nitrate, soil.P, soil.OM, soil_temperature)%>%
   rename(LMA = logLMA,
          LNC = logLNC,
          RNC = logRN,
@@ -174,7 +205,7 @@ data.sel =
          rate.red.teabag  = rate.red
          )
 
-# Warming & cooling effects ----
+# Warming effects ----
 variables <- c("LMA", "LNC", "RNC", "RTD", "SRL", "RD", 
               "VH", "above.productivity", "below.productivity", 
               "rate.green.teabag", "rate.red.teabag", "tot.decomp", 
@@ -221,14 +252,6 @@ ggplot(aes(combi_fac, estimate, color = combi_fac)) +
             aes(group = interaction(var), alpha = adj.p.value), 
             position = position_dodge(width = 0.2), linetype = "dashed", color = "black", size = 1.2,
             arrow = ggplot2::arrow(type = "open", ends = "last", length = unit(0.1, "inches"))) +
-  # geom_line(data = . %>% filter(combi_fac %in% c("SubalpineCooled", "SubalpineControl") & contrast == "Cooling effect"),
-  #           aes(group = interaction(var),alpha = adj.p.value), 
-  #           position = position_dodge(width = 0.2), linetype = "solid", color = efcol[2], size = 1.2,
-  #           arrow = ggplot2::arrow(type = "open", ends = "first", length = unit(0.1, "inches"))) +
-  # geom_line(data = . %>% filter(combi_fac %in% c("SubalpineCooled", "AlpineControl") & contrast == "Cooling lag"),
-  #           aes(group = interaction(var), alpha = adj.p.value), 
-  #           position = position_dodge(width = 0.2), linetype = "dashed", color = efcol[2], size = 1.2,
-  #           arrow = ggplot2::arrow(type = "open", ends = "first", length = unit(0.1, "inches"))) +
   scale_color_manual(values = trecol)+
   scale_size_continuous(breaks = c(0, 0.5, 1, 1.5), range = c(0.3, 2))+
   scale_alpha_manual(values = c(1, 0.4))+
@@ -239,7 +262,7 @@ ggplot(aes(combi_fac, estimate, color = combi_fac)) +
         text = element_text(size = 14))
 
 pdf("PLOTS/effect_size_FT.pdf", height = 9, width = 7)
-pp1
+print(pp1)
 dev.off()
 
 pp2 =
@@ -266,14 +289,6 @@ pp2 =
             aes(group = interaction(var), alpha = adj.p.value), 
             position = position_dodge(width = 0.2), linetype = "dashed", color = "black", size = 1.2,
             arrow = ggplot2::arrow(type = "open", ends = "last", length = unit(0.1, "inches"))) +
-  # geom_line(data = . %>% filter(combi_fac %in% c("SubalpineCooled", "SubalpineControl") & contrast == "Cooling effect"),
-  #           aes(group = interaction(var),alpha = adj.p.value), 
-  #           position = position_dodge(width = 0.2), linetype = "solid", color = efcol[2], size = 1.2,
-  #           arrow = ggplot2::arrow(type = "open", ends = "first", length = unit(0.1, "inches"))) +
-  # geom_line(data = . %>% filter(combi_fac %in% c("SubalpineCooled", "AlpineControl") & contrast == "Cooling lag"),
-  #           aes(group = interaction(var), alpha = adj.p.value), 
-  #           position = position_dodge(width = 0.2), linetype = "dashed", color = efcol[2], size = 1.2,
-  #           arrow = ggplot2::arrow(type = "open", ends = "first", length = unit(0.1, "inches"))) +
   scale_color_manual(values = trecol)+
   scale_size_continuous(breaks = c(0, 0.5, 1, 1.5), range = c(0.3, 2))+
   scale_alpha_manual(values = c(1, 0.4))+
@@ -284,7 +299,7 @@ pp2 =
         text = element_text(size = 14))
 
 pdf("PLOTS/effect_size_ES.pdf", height = 10, width = 7)
-pp2
+print(pp2)
 dev.off()
 
 pp3 =
@@ -308,14 +323,6 @@ pp3 =
             aes(group = interaction(var), alpha = adj.p.value), 
             position = position_dodge(width = 0.2), linetype = "dashed", color = efcol[1], size = 1.2,
             arrow = ggplot2::arrow(type = "open", ends = "last", length = unit(0.1, "inches"))) +
-  # geom_line(data = . %>% filter(combi_fac %in% c("SubalpineCooled", "SubalpineControl") & contrast == "Cooling effect"),
-  #           aes(group = interaction(var),alpha = adj.p.value), 
-  #           position = position_dodge(width = 0.2), linetype = "solid", color = efcol[2], size = 1.2,
-  #           arrow = ggplot2::arrow(type = "open", ends = "first", length = unit(0.1, "inches"))) +
-  # geom_line(data = . %>% filter(combi_fac %in% c("SubalpineCooled", "AlpineControl") & contrast == "Cooling lag"),
-  #           aes(group = interaction(var), alpha = adj.p.value), 
-  #           position = position_dodge(width = 0.2), linetype = "dashed", color = efcol[2], size = 1.2,
-  #           arrow = ggplot2::arrow(type = "open", ends = "first", length = unit(0.1, "inches"))) +
   scale_size_continuous(breaks = c(0, 0.5, 1, 1.5), range = c(0.3, 2))+
   scale_alpha_manual(values = c(1, 0.4))+
   theme_bw() +
@@ -323,7 +330,7 @@ pp3 =
   theme(legend.position = "bottom",
         text = element_text(size = 14))
 pdf("plots/environmental_stress.pdf", height = 6, width = 8)
-pp3
+print(pp3)
 dev.off()
 
 # PCA only controls ----
@@ -345,10 +352,11 @@ loadings = data.frame(matrix(as.numeric(res$loadings),
                                         dimnames=attributes(res$loadings)$dimnames))%>% 
   rownames_to_column(var="variable")%>%
   mutate(type = ifelse(variable %in% c("LMA","LNC","VH"), "Above-ground traits", "Below-ground traits"))
+
 write.csv(loadings, "output/varimax_loadings.csv")
 print(res)
-arrow_len = 2
 
+arrow_len = 2
 centroids = scores %>%
   group_by(combi_fac) %>%
   summarize(
@@ -383,56 +391,7 @@ ggplot() +
         text = element_text(size = 16))
 
 pdf("PLOTS/varimax_pca.pdf", height = 10, width = 10)
-pp3
-dev.off()
-
-## PCA with treatments ----
-data.pca = data.sel %>% 
-  dplyr::select(combi_fac, LMA, LNC, RNC, RTD, SRL, RD, VH)
-
-ncomp = 
-  paran(data.pca %>% dplyr::select(LMA, LNC, RNC, RTD, SRL, RD, VH), iterations = 5000, centile = 0, quietly = FALSE, 
-        status = TRUE, all = TRUE, cfa = TRUE, graph = TRUE, color = TRUE, 
-        col = c("black", "red", "blue"), lty = c(1, 2, 3), lwd = 1, legend = TRUE, 
-        file = "", width = 640, height = 640, grdevice = "png", seed = 0)$Retained
-
-res = psych::principal(dplyr::select(data.pca, where(is.numeric)), nfactors=ncomp, rotate="varimax", covar=TRUE)
-scores = res$scores %>% as_tibble() %>% mutate(combi_fac = data.pca$combi_fac)
-
-loadings = data.frame(matrix(as.numeric(res$loadings), 
-                             attributes(res$loadings)$dim, 
-                             dimnames=attributes(res$loadings)$dimnames))%>% 
-  rownames_to_column(var="variable")%>%
-  mutate(type = ifelse(variable %in% c("LMA","LNC","VH"), "Above-ground traits", "Below-ground traits"))
-print(res)
-arrow_len = 2
-
-centroids = scores %>%
-  group_by(combi_fac) %>%
-  summarize(
-    mean_x = mean(RC1),
-    mean_y = mean(RC2)
-  )
-
-pp3.2 = 
-  ggplot() +
-  theme_bw() +
-  geom_vline(xintercept = 0, color = "grey50") +
-  geom_hline(yintercept = 0, color = "grey50") +
-  geom_point(data = scores, aes(x = RC1, y = RC2, fill = combi_fac), size = 4, shape = 21) +
-  geom_point(data = centroids, aes(x = mean_x, y = mean_y, fill = combi_fac), size = 8, shape = 23) +
-  
-  geom_text(data = loadings, aes(x = RC1 * arrow_len*1.1, y = RC2 * arrow_len*1.1, label = variable, color = type), hjust = 0.5, vjust = 0.5, size = 5) +
-  geom_segment(data = loadings, aes(x = 0, y = 0, xend = RC1 * arrow_len, yend = RC2 * arrow_len, color = type), size = 2, arrow = arrow(length = unit(0.2, "inches"))) +
-  theme_minimal() +
-  labs(color = "", fill = "", x = "Rotated C1", y = "Rotated C2") +
-  scale_fill_manual(values = trecol) +
-  scale_color_manual(values = tracol) +
-  coord_equal() +
-  theme(legend.position = "bottom", text = element_text(size = 14))
-
-pdf("plot/varimax_pca_treatments.pdf", height = 10, width = 11)
-pp3.2
+print(pp3)
 dev.off()
 
 ## Correlations----
@@ -509,7 +468,7 @@ ggplot(trecor %>% filter(effect == "Warming effect"), aes(spectrum, value, color
   theme(text = element_text(size = 16))+
   scale_x_discrete(labels = label_wrap(10))
 
-pp5=
+pp5 =
 trecor %>%
   left_join(trait.comb, by = "comb")%>%
   mutate(traits = factor(traits, levels = c("VH","LMA","LNC","RTD","RNC","RD","SRL")))%>%
@@ -545,14 +504,14 @@ ggplot(aes(value, traits, group = interaction(effect, traits)))+
 pp5
 
 pdf("plots/boxplot_correlations_traits.pdf", height = 6, width = 5)
-pp4
+print(pp4)
 dev.off()
 
 #RDA: Functional traits ~ Soil conditions ----
 data.rda = 
   data.sel %>%
   dplyr::select(combi_fac, VH,LMA,LNC,RTD,RNC,RD,SRL,
-                soil.nitrate, soil.P, moisture)%>%
+                soil.nitrate, soil.P, moisture, soil_temperature)%>%
   filter(combi_fac %in% c("AlpineWarmed", "AlpineControl"))%>%
   #mutate(warmer_climate = as.factor(ifelse(combi_fac %in% c("SubalpineControl","AlpineWarmed"), 1, 0)))%>%
   mutate(treatment = as.factor(ifelse(combi_fac %in% c("SubalpineControl","AlpineControl"), 0, 1)))
@@ -560,7 +519,7 @@ data.rda =
 
 mat = data.rda[,c("VH", "LMA", "LNC","RTD","RNC","RD","SRL")]
 
-m = rda(mat~(moisture+soil.nitrate+soil.P+treatment), data = data.rda)
+m = rda(mat~(moisture+soil.nitrate+soil.P+soil_temperature), data = data.rda)
 RsquareAdj(m)
 summary(m)
 write.csv(
@@ -573,13 +532,13 @@ aov.rda =
   as.data.frame()%>%
   mutate(prop = (Variance/sum(Variance)))%>%
   rownames_to_column(var = "var")%>%
-  mutate(var = case_when(var == "treatment" ~ "Experimental \n climate change",
+  mutate(var = case_when(var == "soil_temperature" ~ "Temperature",
                          var == "Residual"~ "Residuals",
                          var == "soil.P"~ "P concentration",
                          var == "soil.nitrate"~ "Nitrate concentration",
                          var == "moisture"~ "Moisture",
                          .default = var))%>%
-  mutate(var = factor(var, levels = c("Experimental \n climate change", "Moisture", "P concentration", "Nitrate concentration", "Residuals")))%>%
+  mutate(var = factor(var, levels = c("Temperature", "Moisture", "P concentration", "Nitrate concentration", "Residuals")))%>%
   mutate(pval = ifelse(`Pr(>F)`<0.05, "*", ""))%>% 
   mutate(pval = ifelse(is.na(pval), "", pval))
 
@@ -619,13 +578,13 @@ sc.bp = scores(m, choices = 1:2, scaling = 2, display = c("bp")) %>%
   rownames_to_column(var = "var")%>%
   mutate(var = gsub("treatment1","treatment", var))%>%
   mutate(var = gsub("warmer_climate1","warmer_climate", var))%>%
-  mutate(var = case_when(var == "treatment" ~ "Experimental \n climate change",
+  mutate(var = case_when(var == "soil_temperature" ~ "Temperature",
                          var == "Residual"~ "Residuals",
                          var == "soil.P"~ "P concentration",
                          var == "soil.nitrate"~ "Nitrate concentration",
                          var == "moisture"~ "Moisture",
                          .default = var))%>%
-  mutate(var = factor(var, levels = c("Experimental \n climate change", "Moisture", "P concentration", "Nitrate concentration", "Residuals")))
+  mutate(var = factor(var, levels = c("Temperature", "Moisture", "P concentration", "Nitrate concentration", "Residuals")))
   
 
 sc.plot = scores(m, choices = 1:2, scaling= 2, display = "sites")%>%
@@ -668,7 +627,7 @@ pp7 =
 pp7
 
 pdf("plots/RDA_stress.pdf", height = 8, width = 12)
-pp7+pp6
+print(pp7+pp6)
 dev.off()  
 
 # One to one links ----
@@ -687,7 +646,6 @@ pp8 =
   stat_smooth(method = "lm", se = FALSE, fullrange = TRUE)+
   facet_grid(EC~FT, scales = "free")+
   theme_bw()+
-  #scale_color_manual(values = c("black", "grey40"))+
   theme(legend.position = "bottom",
         text = element_text(size = 14))+
   labs(x = "Functional traits", y = "Environmental conditions", color = "")+
@@ -700,7 +658,7 @@ pp8 =
 pp8
 
 pdf("PLOTS/FT_ES.pdf", height = 14, width = 12)
-pp8
+print(pp8)
 dev.off()  
 
 #RDA: Ecosystem functions ~ Functional traits ---- 
@@ -709,12 +667,12 @@ data.rda =
   filter(combi_fac %in% c("AlpineControl", "AlpineWarmed", "SubalpineControl"))%>%
   dplyr::select(combi_fac, VH,LMA,LNC,RTD,RNC,RD,SRL,above.productivity, below.productivity, 
                 rate.green.teabag, qpcr.root,arbuscule)%>%
-  mutate(CC = as.numeric(ifelse(combi_fac %in% c("AlpineControl","SubalpineControl"), 0, 1)))%>%
+  mutate(eCC = as.numeric(ifelse(combi_fac %in% c("AlpineControl","SubalpineControl"), 0, 1)))%>%
   mutate(warmer_climate = as.factor(ifelse(combi_fac %in% c("AlpineWarmed","SubalpineControl"), 0, 1)))
 
 mat = data.rda[,c("above.productivity", "below.productivity", "rate.green.teabag","qpcr.root","arbuscule")]
 
-m = rda(mat~(LMA+LNC+RNC+RTD+SRL+RD+VH)*CC, data = data.rda)
+m = rda(mat~(LMA+LNC+RNC+RTD+SRL+RD+VH)*eCC, data = data.rda)
 RsquareAdj(m)
 summary(m)
 write.csv(
@@ -727,12 +685,12 @@ anova.cca(m, by = "terms")%>%
   as.data.frame()%>%
   mutate(prop = (Variance/sum(Variance)))%>%
   rownames_to_column(var = "var")%>%
-  mutate(var = case_when(var == "CC"~ "Experimental \n climate change",
+  mutate(var = case_when(var == "eCC"~ "Experimental \n climate change",
                          var == "Residual"~ "Residuals",
                          .default = var))%>%
-  mutate(var = factor(var, c("VH","LMA", "LNC","SRL","RD","RNC","RTD",
-                             "VH:CC","LMA:CC","LNC:CC",
-                             "SRL:CC","RD:CC","RNC:CC","RTD:CC",
+  mutate(var = factor(var, c("VH","LMA", "LNC","VH:eCC","LMA:eCC","LNC:eCC",
+                             "SRL","RD","RNC","RTD",
+                             "SRL:eCC","RD:eCC","RNC:eCC","RTD:eCC",
                              "Experimental \n climate change", "Residuals")))%>%
   mutate(pval = ifelse(`Pr(>F)`<0.05, "*", ""))%>% 
   mutate(pval = ifelse(is.na(pval), "", pval))
@@ -743,33 +701,30 @@ aov.rda2 =
   mutate(cumsum = cumsum(prop),
          pos = cumsum - prop / 2)
 
-pp6= 
+pp6 = 
 ggplot(aov.rda, aes(x = "", y = prop, fill = var, color = var)) +
   geom_bar(stat = "identity", width = 1, color ="grey90") +
   coord_polar(theta = "y") +
   theme_void() +
   theme(legend.position = "bottom") +
-  geom_text_repel(data = aov.rda2 %>% filter(prop >= 0.01), 
-                  aes(label = paste(var, pval, "\n", sprintf("%.2f%%", prop * 100)), y = pos),
-                   size = 5, nudge_x = 1, show.legend = FALSE, segment.size = 0.5, force = 200,
-                  segment.color = "black") +
   theme(legend.position = "bottom",
         legend.margin = margin(b = 10),
         text = element_text(size = 16))+
   scale_fill_manual(values = c(rep("#b3de6aff",3),
+                               rep("#7EB325", 3),
                                rep("#8cd3c7ff",4),
-                               rep("#b3de6aff",3),
-                               rep("#8cd3c7ff",4),
+                               rep("#5AC5B3",4),
                                "#43AA8B",
-                               "grey70"))+
+                               "grey70", "grey70"))+
   scale_color_manual(values = c(rep("#b3de6aff",3),
+                               rep("#7EB325", 2),
                                rep("#8cd3c7ff",4),
-                               rep("#b3de6aff",3),
-                               rep("#8cd3c7ff",3),
+                               rep("#5AC5B3",4),
                                "#43AA8B",
-                               "grey70"))+
+                               "grey70", "grey70"))+
   labs(fill = "", color = "")+
   guides(fill = "none", color = "none")
+
 pp6 
 
 sc.es = scores(m, choices = 1:2, scaling = 2, display = "sp")%>% 
@@ -782,13 +737,14 @@ sc.bp = scores(m, choices = 1:2, scaling = 2, display = c("bp")) %>%
   as.data.frame()%>%
   rownames_to_column(var = "var")%>%
   mutate(var = gsub("treatment1","treatment", var))%>%
-  mutate(var = case_when(var == "CC"~ "Experimental \n climate change",
+  mutate(var = case_when(var == "eCC"~ "Experimental \n climate change",
                          var == "Residual"~ "Residuals",
                          .default = var))%>%
-  mutate(var = factor(var, c("VH","LMA", "LNC","SRL","RD","RNC","RTD",
-                             "VH:CC","LMA:CC","LNC:CC",
-                             "SRL:CC","RD:CC","RNC:CC","RTD:CC",
+  mutate(var = factor(var, c("VH","LMA", "LNC","VH:eCC","LMA:eCC","LNC:eCC",
+                             "SRL","RD","RNC","RTD",
+                             "SRL:eCC","RD:eCC","RNC:eCC","RTD:eCC",
                              "Experimental \n climate change", "Residuals")))
+  
   
 sc.plot = scores(m, choices = 1:2, scaling= 2, display = "sites")%>%
   as.data.frame()%>%
@@ -823,10 +779,11 @@ ggplot() +
                   nudge_x = 0.1, nudge_y = 0.1, min.segment.length = Inf) +
   scale_fill_manual(values = trecol) +
   scale_color_manual(values = c(rep("#b3de6aff",3),
+                                rep("#7EB325", 3),
                                 rep("#8cd3c7ff",4),
-                                rep("#b3de6aff",3),
-                                rep("#8cd3c7ff",4),
-                                "#43AA8B"))+
+                                rep("#5AC5B3",4),
+                                "#43AA8B",
+                                "grey70", "grey70"))+
   theme_bw()+
   theme(legend.position = "bottom",
         text = element_text(size = 14),
@@ -835,8 +792,8 @@ ggplot() +
   guides(color = "none")
 pp7
 
-pdf("plots/RDA_ES.pdf", height = 8, width = 12)
-pp7+pp6
+pdf("plots/RDA_ES_nowriting.pdf", height = 8, width = 16)
+print(pp7+pp6)
 dev.off()  
 
 # Get loadings ----
@@ -889,6 +846,7 @@ contributions =
   arrange(Variable)
 
 write.csv(contributions, file = "output/contributions.traits.RDA.csv")
+
 # One to one links ----
 pp8 = 
   data.sel %>%
@@ -923,7 +881,7 @@ pp8 =
     aes(label =  paste(after_stat(eq.label), after_stat(adj.rr.label), sep = "~~~~")))
 
 pdf("plots/FT_ES.pdf", height = 14, width = 12)
-pp8
+print(pp8)
 dev.off()  
 
 
