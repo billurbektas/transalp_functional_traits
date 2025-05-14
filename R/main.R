@@ -31,8 +31,7 @@ warming = round(metaexp %>% filter(site == "subalpine") %>% pull(soil_temperatur
 gsl = round(metaexp %>% filter(site == "subalpine") %>% pull(LengthGS_annual) - metaexp %>% filter(site == "alpine") %>% pull(LengthGS_annual))
 
 data = 
-  get(load("data/data.Rdata"))%>%
-  filter(project == "AlpagesVolants")%>%
+  readRDS("data/data_sub.rds")%>%
   mutate(year = 2021)%>%
   left_join(intratraits, by = c("combi_fac","rep", "year"))%>%
   left_join(moisture %>% mutate(year = 2021), by = c("combi_fac","rep", "year"))%>%
@@ -47,7 +46,7 @@ data =
 
 # Define stress conditions ----
 variables = c("moisture", "soil.P.concentration", "soil.nitrate.concentration", "soil_temperature", "growing_season_length")
-res = map(variables, run_analysis, data = data)
+res = map(variables, run_analysis, data = data) # The warning happens because of the site-level data. There are no statistics calculated on them. Please avoid. 
 mT = map_df(res, "test_results") %>% recode_var(.)
 mK = 
   map_df(res, "contrast_results")%>%
