@@ -1,6 +1,3 @@
-## Add microscopy counts
-library(tidyverse)
-
 myco = get(load("data/input_counts.RData")) %>%
   mutate(arbuscule.occ = ifelse(arbuscule>0,1,0),
          hypha.occ = ifelse(hypha>0,1,0))%>%

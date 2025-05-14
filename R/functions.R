@@ -1,8 +1,7 @@
 run_analysis = function(var, data) {
-  K <- list(`Warming effect` = c(-1, 1, 0),
+  K = list(`Warming effect` = c(-1, 1, 0),
             `Warming lag` = c(0, -1, 1))
 
-  # Create the linear model
   m = lm(as.formula(paste0(var, "~combi_fac")), data = data)
   
   model_stat = glance(m)%>%
@@ -12,7 +11,6 @@ run_analysis = function(var, data) {
   emm_test = test(emm)
   emm_contrast = contrast(emm, K, adjust = "mvt")
   
-  # Tidy and return results with variable name
   emm_test =
     emm_test %>%
     tidy() %>%
@@ -74,11 +72,9 @@ recode_var = function(data){
                         soil.OM = "Organic matter concentration"))
 }
 
-process_data <- function(data, do_log_and_scale = TRUE) {
-  # Transform the data according to the parameter
+process_data = function(data, do_log_and_scale = TRUE) {
   if (do_log_and_scale) {
-    # Log-transform and scale
-    data <- data %>%
+    data = data %>%
       mutate(RN = as.numeric(scale(log(plant_below.N.concentration*10))),
              RTD = as.numeric(scale(log(plant_below.WinRhizo.RTD*10))),
              SRL = as.numeric(scale(log(plant_below.WinRhizo.SRL*10))),
@@ -116,7 +112,7 @@ process_data <- function(data, do_log_and_scale = TRUE) {
              soil_temperature = as.numeric(scale(soil_temperature)))
   } else {
     # No log-transform or scaling, just unit conversions
-    data <- data %>%
+    data = data %>%
       mutate(RN = plant_below.N.concentration,
              RTD = plant_below.WinRhizo.RTD,
              SRL = plant_below.WinRhizo.SRL,
@@ -150,8 +146,7 @@ process_data <- function(data, do_log_and_scale = TRUE) {
              soil_temperature = soil_temperature)
   }
   
-  # Apply gap filling for SubalpineControl group
-  data.sel <- bind_rows(
+  data.sel = bind_rows(
     data %>% filter(combi_fac != "SubalpineControl"),
     data %>%
       filter(combi_fac == "SubalpineControl") %>%
@@ -166,8 +161,7 @@ process_data <- function(data, do_log_and_scale = TRUE) {
              arbuscule = replace_na(arbuscule, mean(arbuscule, na.rm = TRUE)))
   )
   
-  # Apply gap filling for AlpineControl group
-  data.sel <- bind_rows(
+  data.sel = bind_rows(
     data.sel %>% filter(combi_fac != "AlpineControl"),
     data.sel %>%
       filter(combi_fac == "AlpineControl") %>%
@@ -177,8 +171,7 @@ process_data <- function(data, do_log_and_scale = TRUE) {
              qpcr.root = replace_na(qpcr.root, mean(qpcr.root, na.rm = TRUE)))
   )
   
-  # Select and rename variables
-  data.sel <- data.sel %>%
+  data.sel = data.sel %>%
     dplyr::select(combi_fac, rep, LMA, LNC, RN, RTD, SRL, RD, height,
                   above.prod, below.prod, rate.green, rate.red, tot.decomp, ratio.decomp,
                   qpcr.root, qpcr.soil, tot.qpcr, arbuscule, moisture, soil.nitrate, soil.P, 
